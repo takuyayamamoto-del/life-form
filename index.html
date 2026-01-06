@@ -3,13 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>見積依頼</title>
+  <title>依頼フォーム</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 16px; }
     .card { max-width: 720px; margin: 0 auto; padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
+    h2 { margin: 0 0 6px; }
+    .desc { color:#666; font-size:13px; line-height:1.5; margin-bottom: 10px; }
     label { display:block; margin-top: 12px; font-weight: 600; }
-    input, textarea { width:100%; padding:12px; border:1px solid #ccc; border-radius:10px; font-size:16px; box-sizing:border-box; }
+    input, textarea, select {
+      width:100%; padding:12px; border:1px solid #ccc; border-radius:10px;
+      font-size:16px; box-sizing:border-box; background:#fff;
+    }
     textarea { min-height: 110px; resize: vertical; }
     button {
       width:100%; margin-top: 16px; padding: 14px;
@@ -17,72 +22,170 @@
       font-size:16px; font-weight:700;
       background:#06c755; color:#fff;
     }
+    .hint { color:#666; font-size:12px; margin-top:8px; line-height:1.5; }
+    .hidden { display:none; }
+    .note { color:#666; font-size:12px; line-height:1.5; margin-top:6px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2 style="margin:0 0 6px;">見積依頼</h2>
-    <div style="color:#666;font-size:13px;line-height:1.5;">
-      必要事項をご入力ください。送信後、内容はトークに反映されます。
-    </div>
+    <h2 id="title">依頼フォーム</h2>
+    <div id="desc" class="desc"></div>
 
-    <form id="form">
-      <label for="want">見積希望内容（必須）</label>
-      <textarea id="want" required placeholder="例：エコキュート取替の見積、給湯器交換など"></textarea>
+    <!-- 見積 -->
+    <form id="form-estimate" class="hidden">
+      <label for="est-want">見積希望内容（必須）</label>
+      <textarea id="est-want" required placeholder="例：エコキュート取替の見積、給湯器交換など"></textarea>
 
-      <label for="maker">メーカー（必須）</label>
-      <input id="maker" required placeholder="例：三菱 / ダイキン / パナソニック" />
+      <label for="est-maker">メーカー（必須）</label>
+      <input id="est-maker" required placeholder="例：三菱 / ダイキン / パナソニック" />
 
-      <label for="city">住所（設置場所・市町村）（必須）</label>
-      <input id="city" required placeholder="例：富山市 / 高岡市（市町村まで）" />
+      <label for="est-city">住所（設置場所・市町村）（必須）</label>
+      <input id="est-city" required placeholder="例：富山市 / 高岡市（市町村まで）" />
 
       <button type="submit">トークに送信</button>
+      <div class="hint">※送信後、内容はトークに反映されます。</div>
+    </form>
+
+    <!-- 修理 -->
+    <form id="form-repair" class="hidden">
+      <label for="rep-maker">メーカー（必須）</label>
+      <input id="rep-maker" required placeholder="例：三菱 / ダイキン / パナソニック" />
+
+      <label for="rep-years">使用年数（必須）</label>
+      <select id="rep-years" required>
+        <option value="" selected disabled>選択してください</option>
+        <option value="5年未満">5年未満</option>
+        <option value="5-10年">5-10年</option>
+        <option value="10年以上">10年以上</option>
+        <option value="不明">不明</option>
+      </select>
+
+      <label for="rep-symptom">症状・エラーコード（必須）</label>
+      <textarea id="rep-symptom" required placeholder="例：お湯が出ない、沸き上げしない、エラーH59 など"></textarea>
+
+      <button type="submit">トークに送信</button>
+      <div class="hint">※送信後、内容はトークに反映されます。</div>
+    </form>
+
+    <!-- 点検 -->
+    <form id="form-check" class="hidden">
+      <div class="desc" style="margin-top:0;">
+        点検希望（担当者とお客様情報確認の為、宛名シール右上のRから始まる番号か数字の情報を入力お願い致します。）
+      </div>
+
+      <label for="chk-code">Rから始まる番号／数字（必須）</label>
+      <input id="chk-code" required placeholder="例：R123456 または 123456" />
+      <div class="note">※Rで始まる場合は、Rを含めて入力してください。</div>
+
+      <button type="submit">トークに送信</button>
+      <div class="hint">※送信後、内容はトークに反映されます。</div>
     </form>
   </div>
 
   <script>
     const LIFF_ID = "2008827601-tuSCkhGz";
 
+    function getType() {
+      const params = new URLSearchParams(location.search);
+      return (params.get("type") || "estimate").toLowerCase();
+    }
+
+    function show(type) {
+      const title = document.getElementById("title");
+      const desc  = document.getElementById("desc");
+
+      const fEst = document.getElementById("form-estimate");
+      const fRep = document.getElementById("form-repair");
+      const fChk = document.getElementById("form-check");
+
+      fEst.classList.add("hidden");
+      fRep.classList.add("hidden");
+      fChk.classList.add("hidden");
+
+      if (type === "repair") {
+        title.textContent = "修理依頼";
+        desc.textContent = "必要事項をご入力ください。送信後、内容はトークに反映されます。";
+        fRep.classList.remove("hidden");
+      } else if (type === "check") {
+        title.textContent = "点検希望";
+        desc.textContent = "必要事項をご入力ください。送信後、内容はトークに反映されます。";
+        fChk.classList.remove("hidden");
+      } else {
+        title.textContent = "見積依頼";
+        desc.textContent = "必要事項をご入力ください。送信後、内容はトークに反映されます。";
+        fEst.classList.remove("hidden");
+      }
+    }
+
     async function init() {
       await liff.init({ liffId: LIFF_ID });
       if (!liff.isLoggedIn()) {
         liff.login();
+        return;
       }
+      show(getType());
     }
 
-    function buildMessage(want, maker, city) {
-      return [
+    async function sendText(text) {
+      if (!liff.isInClient()) {
+        alert("LINEアプリ内から開いてください。");
+        return;
+      }
+      await liff.sendMessages([{ type: "text", text }]);
+      liff.closeWindow();
+    }
+
+    document.getElementById("form-estimate").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const want  = document.getElementById("est-want").value.trim();
+      const maker = document.getElementById("est-maker").value.trim();
+      const city  = document.getElementById("est-city").value.trim();
+
+      const text = [
         "【見積依頼】",
         `・見積希望内容：${want}`,
         `・メーカー：${maker}`,
         `・設置場所（市町村）：${city}`
       ].join("\n");
-    }
 
-    document.getElementById("form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      if (!liff.isInClient()) {
-        alert("LINEアプリ内から開いてください。");
-        return;
-      }
-
-      const want = document.getElementById("want").value.trim();
-      const maker = document.getElementById("maker").value.trim();
-      const city = document.getElementById("city").value.trim();
-
-      try {
-        await liff.sendMessages([{
-          type: "text",
-          text: buildMessage(want, maker, city)
-        }]);
-        liff.closeWindow();
-      } catch (e) {
-        alert("送信に失敗しました。時間をおいて再度お試しください。");
-      }
+      try { await sendText(text); }
+      catch { alert("送信に失敗しました。時間をおいて再度お試しください。"); }
     });
 
-    init();
+    document.getElementById("form-repair").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const maker   = document.getElementById("rep-maker").value.trim();
+      const years   = document.getElementById("rep-years").value;
+      const symptom = document.getElementById("rep-symptom").value.trim();
+
+      const text = [
+        "【修理依頼】",
+        `・メーカー：${maker}`,
+        `・使用年数：${years}`,
+        `・症状／エラーコード：${symptom}`
+      ].join("\n");
+
+      try { await sendText(text); }
+      catch { alert("送信に失敗しました。時間をおいて再度お試しください。"); }
+    });
+
+    document.getElementById("form-check").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const code = document.getElementById("chk-code").value.trim();
+
+      const text = [
+        "【点検希望】",
+        "担当者とお客様情報確認の為、宛名シール右上のRから始まる番号か数字の情報を入力お願い致します。",
+        "※Rで始まる場合は、Rを含めて入力してください。",
+        `・番号：${code}`
+      ].join("\n");
+
+      try { await sendText(text); }
+      catch { alert("送信に失敗しました。時間をおいて再度お試しください。"); }
+    });
+
+    init().catch(() => alert("初期化に失敗しました。時間をおいて再度お試しください。"));
   </script>
 </body>
 </html>

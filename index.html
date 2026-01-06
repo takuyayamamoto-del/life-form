@@ -1,100 +1,74 @@
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>見積依頼フォーム</title>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 16px; }
-    .card { max-width: 720px; margin: 0 auto; padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
-    label { display:block; margin-top: 12px; font-weight: 600; }
-    input, textarea, select { width:100%; padding:12px; border:1px solid #ccc; border-radius:10px; font-size:16px; box-sizing:border-box; }
-    textarea { min-height: 120px; resize: vertical; }
-    button { width:100%; margin-top: 16px; padding: 12px; border:0; border-radius: 12px; font-size:16px; font-weight:700; }
-    .note { color:#666; font-size: 13px; margin-top: 10px; line-height: 1.5; }
-    .err { color:#b00020; white-space: pre-wrap; margin-top: 10px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h2 style="margin:0 0 6px;">見積依頼</h2>
-    <div class="note">
-      必要事項をご入力ください。送信後、入力内容がトークに投稿されます。
-    </div>
+<!-- 省略：head/body/フォームはそのままでOK -->
 
-    <form id="form">
-      <label for="want">見積希望内容（必須）</label>
-      <textarea id="want" name="want" placeholder="例：エコキュート取替、給湯器交換、配管修理の見積など" required></textarea>
+<div id="status" style="white-space:pre-wrap; margin-top:12px; color:#333;"></div>
 
-      <label for="maker">メーカー（必須）</label>
-      <input id="maker" name="maker" placeholder="例：三菱 / ダイキン / パナソニック など" required />
+<script>
+  const LIFF_ID = "2008827601-tuSCkhGz";
 
-      <label for="city">住所（設置場所・市町村）（必須）</label>
-      <input id="city" name="city" placeholder="例：富山市 / 高岡市 など（市町村まで）" required />
+  const $status = document.getElementById("status");
+  function log(msg) { $status.textContent += msg + "\n"; }
 
-      <div class="note">
-        ※電話番号や番地など、不要な個人情報は入力しない運用にすると安全です。
-      </div>
+  async function boot() {
+    await liff.init({ liffId: LIFF_ID });
 
-      <button type="submit">トークに送信</button>
-      <div id="err" class="err"></div>
-    </form>
-  </div>
+    log("LIFF init: OK");
+    log("isInClient: " + liff.isInClient());
+    log("isLoggedIn: " + liff.isLoggedIn());
 
-  <script>
-    const LIFF_ID = "
-https://liff.line.me/2008827601-tuSCkhGz"; // ←差し替え
-
-    const $err = document.getElementById("err");
-
-    async function boot() {
-      await liff.init({ liffId: LIFF_ID }); // 毎回必須
-      // 必要ならログイン（通常リッチメニューから開くなら不要なことが多い）
-      if (!liff.isLoggedIn()) liff.login();
+    if (!liff.isLoggedIn()) {
+      log("login required -> liff.login()");
+      liff.login();
+      return;
     }
 
-    function buildMessage({ want, maker, city }) {
-      // 1通のテキストとして投稿（運用しやすい形に整形）
-      return [
-        "【見積依頼】",
-        `・見積希望内容：${want}`,
-        `・メーカー：${maker}`,
-        `・設置場所（市町村）：${city}`
-      ].join("\n");
-    }
+    const granted = await liff.permission.getGrantedAll();
+    log("granted scopes: " + JSON.stringify(granted));
+  }
 
-    document.getElementById("form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      $err.textContent = "";
+  function buildMessage({ want, maker, city }) {
+    return [
+      "【見積依頼】",
+      `・見積希望内容：${want}`,
+      `・メーカー：${maker}`,
+      `・設置場所（市町村）：${city}`
+    ].join("\n");
+  }
 
-      const want = document.getElementById("want").value.trim();
-      const maker = document.getElementById("maker").value.trim();
-      const city = document.getElementById("city").value.trim();
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $status.textContent = "";
 
-      try {
-        // トークへ投稿（chat_message.write が必要）
-        await liff.sendMessages([{
-          type: "text",
-          text: buildMessage({ want, maker, city })
-        }]);
+    const want = document.getElementById("want").value.trim();
+    const maker = document.getElementById("maker").value.trim();
+    const city = document.getElementById("city").value.trim();
 
-        // 送信できたら閉じる
-        liff.closeWindow();
-      } catch (error) {
-        // よくある原因：chat_message.write未同意 / LINE外ブラウザ / 再読み込みで開いた 等
-        $err.textContent =
-          "送信に失敗しました。\n" +
-          "・リッチメニューから開き直して再度お試しください。\n" +
-          "・LIFFのScopeに chat_message.write が有効か確認してください。\n\n" +
-          "エラー詳細: " + (error?.message || JSON.stringify(error));
+    try {
+      if (!liff.isInClient()) {
+        throw new Error("LINEアプリ内で開いていません（リッチメニューから開き直してください）");
       }
-    });
 
-    boot().catch(err => {
-      $err.textContent = "初期化に失敗しました: " + (err?.message || JSON.stringify(err));
-    });
-  </script>
-</body>
-</html>
+      // ★ここが重要：ユーザーが chat_message.write を許可していない場合がある
+      const granted = await liff.permission.getGrantedAll();
+      if (!granted.includes("chat_message.write")) {
+        log("requesting permissions...");
+        await liff.permission.requestAll(); // 同意画面を出す
+      }
 
+      // 再チェック
+      const granted2 = await liff.permission.getGrantedAll();
+      log("granted scopes(after): " + JSON.stringify(granted2));
+      if (!granted2.includes("chat_message.write")) {
+        throw new Error("chat_message.write が許可されていません（同意しないとトークに送れません）");
+      }
+
+      await liff.sendMessages([{ type: "text", text: buildMessage({ want, maker, city }) }]);
+      log("sendMessages: OK");
+      liff.closeWindow();
+    } catch (err) {
+      log("ERROR: " + (err?.message || JSON.stringify(err)));
+      // 送信失敗時は閉じない（エラーが見えるように）
+    }
+  });
+
+  boot().catch(err => log("INIT ERROR: " + (err?.message || JSON.stringify(err))));
+</script>
